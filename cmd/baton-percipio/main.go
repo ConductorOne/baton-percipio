@@ -30,7 +30,7 @@ func main() {
 		config2.ConfigurationSchema,
 	)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
@@ -38,28 +38,26 @@ func main() {
 
 	err = cmd.Execute()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 }
 
 func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	limitCourses := v.GetStringSlice(config2.LimitCoursesField.FieldName)
 	cb, err := connector.New(
 		ctx,
 		v.GetString(config2.OrganizationIdField.FieldName),
 		v.GetString(config2.ApiTokenField.FieldName),
-		limitCourses,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
 	}
-	connector, err := connectorbuilder.NewConnector(ctx, cb)
+	conn, err := connectorbuilder.NewConnector(ctx, cb)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
 	}
-	return connector, nil
+	return conn, nil
 }

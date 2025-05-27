@@ -2,9 +2,9 @@ package connector
 
 import (
 	"context"
+	"github.com/conductorone/baton-percipio/pkg/client"
 	"strings"
 
-	"github.com/conductorone/baton-percipio/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -20,9 +20,11 @@ const (
 type userBuilder struct {
 	client       *client.Client
 	resourceType *v2.ResourceType
+	report       *client.Report
 }
 
 func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
+	_ = ctx // This method returns a static resource type
 	return o.resourceType
 }
 
@@ -49,39 +51,16 @@ func getDisplayName(user client.User) string {
 // Create a new connector resource for a Percipio user.
 func userResource(user client.User, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	profile := map[string]interface{}{
-		"id":                                user.Id,
-		"external_id":                       user.ExternalUserId,
-		"approval_manager":                  user.ApprovalManager.Email,
-		"email":                             user.Email,
-		"first_name":                        user.FirstName,
-		"has_coaching":                      user.HasCoaching,
-		"has_enterprise_coaching":           user.HasEnterpriseCoaching,
-		"has_enterprise_coaching_dashboard": user.HasEnterpriseCoaching,
-		"is_active":                         user.IsActive,
-		"is_instructor":                     user.IsInstructor,
-		"job_title":                         user.JobTitle,
-		"last_name":                         user.LastName,
-		"login_name":                        user.LoginName,
-		"role":                              user.Role,
-	}
-
-	for _, attribute := range user.CustomAttributes {
-		// TODO(marcos): Should I omit fields that are nullish? What about
-		// overlapping field names?
-		profile[attribute.Name] = attribute.Value
-	}
-
-	// TODO(marcos): check that "isActive" means that the user is active.
-	status := v2.UserTrait_Status_STATUS_DISABLED
-	if user.IsActive {
-		status = v2.UserTrait_Status_STATUS_ENABLED
+		"id":         user.Id,
+		"email":      user.Email,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
 	}
 
 	userTraitOptions := []resourceSdk.UserTraitOption{
 		resourceSdk.WithEmail(user.Email, true),
-		resourceSdk.WithStatus(status),
+		resourceSdk.WithStatus(v2.UserTrait_Status_STATUS_ENABLED), // All users from report are active
 		resourceSdk.WithUserProfile(profile),
-		resourceSdk.WithUserLogin(user.LoginName),
 	}
 
 	userResource0, err := resourceSdk.NewUserResource(
@@ -103,7 +82,7 @@ func userResource(user client.User, parentResourceID *v2.ResourceId) (*v2.Resour
 func (o *userBuilder) List(
 	ctx context.Context,
 	parentResourceID *v2.ResourceId,
-	pToken *pagination.Token,
+	_ *pagination.Token,
 ) (
 	[]*v2.Resource,
 	string,
@@ -111,32 +90,94 @@ func (o *userBuilder) List(
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
-	logger.Debug("Starting Users List", zap.String("token", pToken.Token))
+	logger.Debug("Starting Users List from Report Data")
 
 	outputResources := make([]*v2.Resource, 0)
 	var outputAnnotations annotations.Annotations
 
-	offset, limit, _, err := client.ParsePaginationToken(pToken)
-	if err != nil {
-		return nil, "", nil, err
+	if o.report == nil || len(*o.report) == 0 {
+		logger.Warn("No report data available")
+		return outputResources, "", outputAnnotations, nil
 	}
 
-	users, total, ratelimitData, err := o.client.GetUsers(ctx, offset, limit)
-	outputAnnotations.WithRateLimiting(ratelimitData)
-	if err != nil {
-		return nil, "", outputAnnotations, err
+	// Extract unique users from report, keeping the most recent data
+	type userWithDate struct {
+		user           client.User
+		mostRecentDate string
 	}
-	for _, user := range users {
-		userResource0, err := userResource(user, parentResourceID)
+
+	userMap := make(map[string]userWithDate)
+
+	for _, entry := range *o.report {
+		// Determine the most recent date for this entry
+		// Priority: completedDate > lastAccess > firstAccess
+		var mostRecentDate string
+		if entry.CompletedDate != "" {
+			mostRecentDate = entry.CompletedDate
+		} else if entry.LastAccess != "" {
+			mostRecentDate = entry.LastAccess
+		} else {
+			mostRecentDate = entry.FirstAccess
+		}
+
+		if existing, exists := userMap[entry.UserId]; exists {
+			// Compare dates to see if this entry is more recent
+			if mostRecentDate > existing.mostRecentDate {
+				// This entry is more recent, update the user data
+				logger.Debug("Updating user with more recent data",
+					zap.String("userId", entry.UserId),
+					zap.String("oldDate", existing.mostRecentDate),
+					zap.String("newDate", mostRecentDate))
+
+				userMap[entry.UserId] = userWithDate{
+					user: client.User{
+						Id:        entry.UserId,
+						Email:     entry.EmailAddress,
+						FirstName: entry.FirstName,
+						LastName:  entry.LastName,
+					},
+					mostRecentDate: mostRecentDate,
+				}
+			}
+		} else {
+			// First time seeing this user
+			if entry.EmailAddress == "" {
+				logger.Warn("User missing email address",
+					zap.String("userId", entry.UserId),
+					zap.String("firstName", entry.FirstName),
+					zap.String("lastName", entry.LastName))
+			}
+			if entry.FirstName == "" && entry.LastName == "" {
+				logger.Warn("User missing name",
+					zap.String("userId", entry.UserId),
+					zap.String("email", entry.EmailAddress))
+			}
+
+			userMap[entry.UserId] = userWithDate{
+				user: client.User{
+					Id:        entry.UserId,
+					Email:     entry.EmailAddress,
+					FirstName: entry.FirstName,
+					LastName:  entry.LastName,
+				},
+				mostRecentDate: mostRecentDate,
+			}
+		}
+	}
+
+	// Convert map to resources
+	for _, userData := range userMap {
+		userResource0, err := userResource(userData.user, parentResourceID)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, "", outputAnnotations, err
 		}
 		outputResources = append(outputResources, userResource0)
 	}
 
-	nextToken := client.GetNextToken(offset, limit, total, "")
+	logger.Debug("Extracted users from report", zap.Int("userCount", len(outputResources)))
 
-	return outputResources, nextToken, outputAnnotations, nil
+	// No pagination needed since we're returning all users from the report
+	return outputResources, "", outputAnnotations, nil
 }
 
 // Entitlements always returns an empty slice for users.
@@ -167,9 +208,10 @@ func (o *userBuilder) Grants(
 	return nil, "", nil, nil
 }
 
-func newUserBuilder(client *client.Client) *userBuilder {
+func newUserBuilder(client *client.Client, report *client.Report) *userBuilder {
 	return &userBuilder{
 		client:       client,
 		resourceType: userResourceType,
+		report:       report,
 	}
 }

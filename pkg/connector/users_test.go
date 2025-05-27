@@ -2,9 +2,9 @@ package connector
 
 import (
 	"context"
+	"github.com/conductorone/baton-percipio/pkg/client"
 	"testing"
 
-	"github.com/conductorone/baton-percipio/pkg/connector/client"
 	"github.com/conductorone/baton-percipio/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -28,7 +28,7 @@ func TestUsersList(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		c := newUserBuilder(percipioClient)
+		c := newUserBuilder(percipioClient, nil)
 
 		resources := make([]*v2.Resource, 0)
 		pToken := pagination.Token{

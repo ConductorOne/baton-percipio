@@ -3,15 +3,14 @@ package connector
 import (
 	"context"
 	"fmt"
+	"github.com/conductorone/baton-percipio/pkg/client"
 
-	"github.com/conductorone/baton-percipio/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	resourceSdk "github.com/conductorone/baton-sdk/pkg/types/resource"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -25,55 +24,28 @@ const (
 type courseBuilder struct {
 	client       *client.Client
 	resourceType *v2.ResourceType
-	limitCourses mapset.Set[string]
+	report       *client.Report
 }
 
 func (o *courseBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
+	_ = ctx // This method returns a static resource type
 	return o.resourceType
 }
 
-// Returns nil if we want to skip syncing this course resource.
-func courseResource(ctx context.Context, course client.Course, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
-	l := ctxzap.Extract(ctx)
-	if course.Lifecycle.Status == "INACTIVE" {
-		l.Debug("Skipping inactive course", zap.String("courseId", course.Id))
-		return nil, nil
-	}
-	if course.ContentType.PercipioType != "COURSE" && course.ContentType.PercipioType != "ASSESMENT" {
-		l.Debug("Skipping non-course content", zap.String("courseId", course.Id), zap.String("contentType", course.ContentType.PercipioType))
-		return nil, nil
-	}
-
+// Create a new connector resource for a Percipio course.
+func courseResource(course client.Course, parentResourceID *v2.ResourceId) (*v2.Resource, error) {
 	resourceOpts := []resourceSdk.ResourceOption{
 		resourceSdk.WithParentResourceID(parentResourceID),
 	}
 
-	courseName := ""
-	for _, metadata := range course.LocalizedMetadata {
-		if metadata.Title == "" {
-			continue
-		}
-
-		// American is the best language. Default to it.
-		if metadata.LocaleCode == "en-US" {
-			courseName = metadata.Title
-			break
-		}
-
-		if courseName == "" {
-			courseName = metadata.Title
-		}
-	}
-
-	if courseName == "" {
-		courseName = course.Code
-	}
-	if courseName == "" {
-		courseName = course.Id
+	// Use course name, fallback to ID if name is empty
+	displayName := course.Name
+	if displayName == "" {
+		displayName = course.Id
 	}
 
 	resource, err := resourceSdk.NewResource(
-		courseName,
+		displayName,
 		courseResourceType,
 		course.Id,
 		resourceOpts...,
@@ -88,7 +60,7 @@ func courseResource(ctx context.Context, course client.Course, parentResourceID 
 func (o *courseBuilder) List(
 	ctx context.Context,
 	parentResourceID *v2.ResourceId,
-	pToken *pagination.Token,
+	_ *pagination.Token,
 ) (
 	[]*v2.Resource,
 	string,
@@ -96,43 +68,58 @@ func (o *courseBuilder) List(
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
-	logger.Debug("Starting Courses List", zap.String("token", pToken.Token))
+	logger.Debug("Starting Courses List from Report Data")
 
 	outputResources := make([]*v2.Resource, 0)
 	var outputAnnotations annotations.Annotations
 
-	offset, limit, pagingRequestId, err := client.ParsePaginationToken(pToken)
-	if err != nil {
-		return nil, "", nil, err
+	if o.report == nil || len(*o.report) == 0 {
+		logger.Warn("No report data available")
+		return outputResources, "", outputAnnotations, nil
 	}
 
-	courses, pagingRequestId, total, ratelimitData, err := o.client.GetCourses(
-		ctx,
-		offset,
-		limit,
-		pagingRequestId,
-	)
-	outputAnnotations.WithRateLimiting(ratelimitData)
-	if err != nil {
-		return nil, "", outputAnnotations, err
-	}
-	for _, course := range courses {
-		if o.limitCourses != nil && !o.limitCourses.Contains(course.Id) {
+	// Extract unique courses from report
+	courseMap := make(map[string]client.Course)
+	for _, entry := range *o.report {
+		// Use contentId as the primary identifier
+		courseId := entry.ContentId
+		if courseId == "" {
+			logger.Warn("Course missing contentId, skipping",
+				zap.String("contentTitle", entry.ContentTitle),
+				zap.String("contentUuid", entry.ContentUuid),
+				zap.String("contentType", entry.ContentType))
 			continue
 		}
-		resource, err := courseResource(ctx, course, parentResourceID)
+
+		if _, exists := courseMap[courseId]; !exists {
+			// Check for missing title
+			if entry.ContentTitle == "" {
+				logger.Warn("Course missing title",
+					zap.String("courseId", courseId),
+					zap.String("contentType", entry.ContentType))
+			}
+
+			courseMap[courseId] = client.Course{
+				Id:   courseId,
+				Name: entry.ContentTitle,
+				// UUID: entry.ContentUuid, // Commented out as per requirements
+			}
+		}
+	}
+
+	// Convert map to resources
+	for _, course := range courseMap {
+		courseResource0, err := courseResource(course, parentResourceID)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, "", outputAnnotations, err
 		}
-		if resource == nil {
-			continue
-		}
-		outputResources = append(outputResources, resource)
+		outputResources = append(outputResources, courseResource0)
 	}
 
-	nextToken := client.GetNextToken(offset, limit, total, pagingRequestId)
+	logger.Debug("Extracted courses from report", zap.Int("courseCount", len(outputResources)))
 
-	return outputResources, nextToken, outputAnnotations, nil
+	// No pagination needed since we're returning all courses from the report
+	return outputResources, "", outputAnnotations, nil
 }
 
 func (o *courseBuilder) Entitlements(
@@ -170,12 +157,7 @@ func (o *courseBuilder) Entitlements(
 	}, "", nil, nil
 }
 
-// Grants we have to do a pretty complicated set of maneuvers here to fetch
-// grants. First, we need to POST a request to the "generate report" endpoint,
-// which returns a UUID that we can use to interpolate a URL where the report
-// will appear. From there we have to _poll_ that endpoint until it states that
-// the report is ready. Finally, we need to store the data (which can be on the
-// order of 1 GB) in memory so that we can find grants for a given resource.
+// Grants returns the grants for a course resource based on the pre-loaded report data.
 func (o *courseBuilder) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -186,23 +168,11 @@ func (o *courseBuilder) Grants(
 	annotations.Annotations,
 	error,
 ) {
+	_ = ctx // Report data is pre-loaded, no API calls needed
 	var outputAnnotations annotations.Annotations
-	if o.client.ReportStatus.Status == "" {
-		ratelimitData, err := o.client.GenerateLearningActivityReport(ctx)
-		outputAnnotations.WithRateLimiting(ratelimitData)
-		if err != nil {
-			return nil, "", outputAnnotations, err
-		}
-	}
 
-	if o.client.ReportStatus.Status == "PENDING" || o.client.ReportStatus.Status == "IN_PROGRESS" {
-		ratelimitData, err := o.client.GetLearningActivityReport(ctx)
-		outputAnnotations.WithRateLimiting(ratelimitData)
-		if err != nil {
-			return nil, "", outputAnnotations, err
-		}
-	}
-
+	// Report is already loaded during connector initialization
+	// Just get the status map for this course
 	statusesMap := o.client.StatusesStore.Get(resource.Id.Resource)
 
 	grants := make([]*v2.Grant, 0)
@@ -218,10 +188,10 @@ func (o *courseBuilder) Grants(
 	return grants, "", outputAnnotations, nil
 }
 
-func newCourseBuilder(client *client.Client, limitCourses mapset.Set[string]) *courseBuilder {
+func newCourseBuilder(client *client.Client, report *client.Report) *courseBuilder {
 	return &courseBuilder{
 		client:       client,
 		resourceType: courseResourceType,
-		limitCourses: limitCourses,
+		report:       report,
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/conductorone/baton-percipio/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -46,8 +45,6 @@ func FixturesServer() *httptest.Server {
 		http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set(uhttp.ContentType, "application/json")
-				writer.Header().Set(client.HeaderNameTotalCount, "2")
-				writer.Header().Set(client.HeaderNamePagingRequestId, "0")
 				writer.WriteHeader(http.StatusOK)
 				var filename string
 				routeUrl := request.URL.String()
