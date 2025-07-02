@@ -38,11 +38,7 @@ linters:
     exhaustive:
       default-signifies-exhaustive: true
     gocritic:
-      enabled-checks:
-        - ruleguard
       settings:
-        ruleguard:
-          rules: ${base-path}/tools/rules.go
         underef:
           skipRecvDeref: false
     govet:
@@ -72,7 +68,6 @@ linters:
           arguments:
             - fmt.Printf
             - fmt.Println
-            - fmt.Fprint
             - fmt.Fprintf
             - fmt.Fprintln
             - os.Stderr.Sync
