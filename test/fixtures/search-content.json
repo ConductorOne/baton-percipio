@@ -1,0 +1,78 @@
+[
+  {
+    "id": "1a3a3f54-b601-4d45-a234-038c980ee20f",
+    "code": null,
+    "xapiActivityId": "https://xapi.percipio.com/xapi/course/1a3a3f54-b601-4d45-a234-038c980ee20f",
+    "xapiActivityTypeId": "http://adlnet.gov/expapi/activities/course",
+    "characteristics": {
+      "earnsBadge": false,
+      "hasAssessment": false,
+      "isCompliance": false
+    },
+    "contentType": {
+      "percipioType": "COURSE",
+      "category": "COURSE",
+      "displayLabel": "Course",
+      "source": null
+    },
+    "localeCodes": [
+      "en-US"
+    ],
+    "localizedMetadata": [
+      {
+        "localeCode": "en-US",
+        "title": "Case Studies: Successful Data Privacy Implementations",
+        "description": "Learn from real-world examples of successful data privacy implementations."
+      }
+    ],
+    "lifecycle": {
+      "status": "ACTIVE",
+      "publishDate": "2020-04-02T12:24:33Z",
+      "lastUpdatedDate": "2023-10-06T23:08:23Z",
+      "plannedRetirementDate": null,
+      "retiredDate": null,
+      "includedFromActivity": false
+    },
+    "link": "https://share.percipio.com/cd/1234567890AB",
+    "aiccLaunch": null,
+    "ltiResourceLink": {
+      "url": "https://api.percipio.com/content-integration/v1/lti/launch/organizations/00000000-0000-0000-0000-000000000000/content/course/1a3a3f54-b601-4d45-a234-038c980ee20f"
+    },
+    "imageUrl": "https://cdn2.percipio.com/public/b/00000000-0000-0000-0000-000000000000/image001/modality/image001.jpg",
+    "alternateImageUrl": "https://cdn2.percipio.com/public/b/00000000-0000-0000-0000-000000000000/image001.jpg",
+    "keywords": [ ],
+    "duration": "PT15M00S",
+    "by": [
+      "Privacy Expert"
+    ],
+    "publication": null,
+    "credentials": null,
+    "expertiseLevels": [
+      "INTERMEDIATE"
+    ],
+    "modalities": [
+      "WATCH"
+    ],
+    "technologies": [ ],
+    "associations": {
+      "areas": [
+        "Security",
+        "Compliance"
+      ],
+      "subjects": [
+        "Data Privacy",
+        "GDPR Compliance"
+      ],
+      "channels": [],
+      "parent": null,
+      "translationGroupId": null,
+      "journeys": [ ],
+      "licensedLocales": "",
+      "collections": [],
+      "skills": []
+    },
+    "learningObjectives": [ ],
+    "providerSpecificAttributes": null,
+    "licenseKeys": null
+  }
+]

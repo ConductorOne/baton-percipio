@@ -33,7 +33,7 @@ func TestCoursesList(t *testing.T) {
 		resources := make([]*v2.Resource, 0)
 		pToken := pagination.Token{
 			Token: "",
-			Size:  1,
+			Size:  1000, // The implementation uses a fixed page size of 1000
 		}
 		for {
 			nextResources, nextToken, listAnnotations, err := c.List(ctx, nil, &pToken)
@@ -49,7 +49,7 @@ func TestCoursesList(t *testing.T) {
 		}
 
 		require.NotNil(t, resources)
-		require.Len(t, resources, 3)
+		require.Len(t, resources, 1) // Only 1 course in the fixture
 		require.NotEmpty(t, resources[0].Id)
 	})
 

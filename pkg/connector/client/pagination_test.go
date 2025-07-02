@@ -9,7 +9,7 @@ import (
 
 func TestPagination(t *testing.T) {
 	ctx := context.Background()
-	
+
 	t.Run("GetUserNextToken", func(t *testing.T) {
 		testCases := []struct {
 			message  string
