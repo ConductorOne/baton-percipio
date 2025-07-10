@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -250,36 +248,28 @@ func (c *Client) GenerateLearningActivityReport(
 // Which is necessary because the initial report generation request only returns a job ID, not the final data.
 // This implementation includes a custom retry loop and handles the API's unusual behavior
 // of returning different data structures for the same endpoint.
-// We use the native Go net/http package instead of uhttp for the report polling function as uhttp
-// seems to ignore Cache-Control: no-cache headers and kept returning IN_PROGRESS for the report polling
-// even when the report was completed and available during testing.
-func (c *Client) pollLearningActivityReport(ctx context.Context, reportUrl string) ([]byte, *v2.RateLimitDescription, error) {
+// Now uses standard uhttp following the same patterns as other API methods.
+func (c *Client) pollLearningActivityReport(ctx context.Context, reportId string) ([]byte, *v2.RateLimitDescription, error) {
 	var ratelimitData *v2.RateLimitDescription
 
 	l := ctxzap.Extract(ctx)
+
+	// Since ApiPathReport has two format placeholders but getUrl only formats one,
+	// we need to pre-format the report ID into the path
+	reportPath := fmt.Sprintf(ApiPathReport, "%s", reportId)
+
 	for i := 0; i < config.RetryAttemptsMaximum; i++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reportUrl, nil)
+		var responseData json.RawMessage
+
+		// Use the standard get method with the pre-formatted path
+		resp, ratelimitData, err := c.get(ctx, reportPath, nil, &responseData)
 		if err != nil {
-			return nil, nil, err
-		}
-
-		req.Header.Set("Authorization", "Bearer "+c.bearerToken)
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-			l.Error("error reading response body", zap.Error(err))
-			_ = resp.Body.Close()
+			// uhttp handles 429s and other HTTP errors appropriately
 			return nil, ratelimitData, err
 		}
-		_ = resp.Body.Close()
+		defer resp.Body.Close()
 
-		trimmedBody := bytes.TrimSpace(bodyBytes)
+		trimmedBody := bytes.TrimSpace(responseData)
 		if len(trimmedBody) == 0 {
 			l.Warn("empty response body from percipio api, retrying...")
 			time.Sleep(time.Second * time.Duration(config.RetryAfterSeconds))
@@ -333,8 +323,7 @@ func (c *Client) GetLearningActivityReport(
 		ratelimitData *v2.RateLimitDescription
 		target        Report
 	)
-	reportUrl := fmt.Sprintf("%s%s", c.baseUrl.String(), fmt.Sprintf(ApiPathReport, c.organizationId, c.ReportStatus.Id))
-	bodyBytes, ratelimitData, err := c.pollLearningActivityReport(ctx, reportUrl)
+	bodyBytes, ratelimitData, err := c.pollLearningActivityReport(ctx, c.ReportStatus.Id)
 	if err != nil {
 		return ratelimitData, err
 	}
