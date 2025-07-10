@@ -21,6 +21,9 @@ var (
 )
 
 func main() {
+	// Disable HTTP caching for this connector to ensure report polling always gets fresh results
+	os.Setenv("BATON_DISABLE_HTTP_CACHE", "true")
+
 	ctx := context.Background()
 
 	_, cmd, err := config.DefineConfiguration(
