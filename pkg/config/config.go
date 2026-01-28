@@ -8,6 +8,7 @@ var (
 	ApiTokenField = field.StringField(
 		"api-token",
 		field.WithDescription("The Percipio Bearer Token"),
+		field.WithIsSecret(true),
 		field.WithRequired(true),
 	)
 	OrganizationIdField = field.StringField(
@@ -36,9 +37,10 @@ var (
 	// username and password can be required together, or an access token can be
 	// marked as mutually exclusive from the username password pair.
 	FieldRelationships = []field.SchemaFieldRelationship{}
+)
 
-	ConfigurationSchema = field.NewConfiguration(
-		ConfigurationFields,
-		field.WithConstraints(FieldRelationships...),
-	)
+//go:generate go run ./gen
+var Config = field.NewConfiguration(
+	ConfigurationFields,
+	field.WithConstraints(FieldRelationships...),
 )

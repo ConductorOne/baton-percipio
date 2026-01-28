@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	config2 "github.com/conductorone/baton-percipio/pkg/config"
+	cfg "github.com/conductorone/baton-percipio/pkg/config"
 	"github.com/conductorone/baton-percipio/pkg/connector"
 	"github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/connectorrunner"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +30,8 @@ func main() {
 		ctx,
 		connectorName,
 		getConnector,
-		config2.ConfigurationSchema,
+		cfg.Config,
+		connectorrunner.WithDefaultCapabilitiesConnectorBuilder(&connector.Connector{}),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -46,14 +47,13 @@ func main() {
 	}
 }
 
-func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, error) {
+func getConnector(ctx context.Context, c *cfg.Percipio) (types.ConnectorServer, error) {
 	l := ctxzap.Extract(ctx)
-	limitCourses := v.GetStringSlice(config2.LimitCoursesField.FieldName)
 	cb, err := connector.New(
 		ctx,
-		v.GetString(config2.OrganizationIdField.FieldName),
-		v.GetString(config2.ApiTokenField.FieldName),
-		limitCourses,
+		c.OrganizationId,
+		c.ApiToken,
+		c.LimitedCourses,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
