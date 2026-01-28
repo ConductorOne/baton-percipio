@@ -8,6 +8,7 @@ var (
 	ApiTokenField = field.StringField(
 		"api-token",
 		field.WithDescription("The Percipio Bearer Token"),
+		field.WithIsSecret(true),
 		field.WithRequired(true),
 	)
 	OrganizationIdField = field.StringField(
