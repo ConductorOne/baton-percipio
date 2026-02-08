@@ -23,6 +23,11 @@ var (
 		field.WithRequired(false),
 	)
 
+	BaseURLField = field.StringField(
+		"base-url",
+		field.WithDescription("Override the Percipio API URL (for testing)"),
+	)
+
 	// ConfigurationFields defines the external configuration required for the
 	// connector to run. Note: these fields can be marked as optional or
 	// required.
@@ -30,6 +35,7 @@ var (
 		ApiTokenField,
 		OrganizationIdField,
 		LimitCoursesField,
+		BaseURLField,
 	}
 
 	// FieldRelationships defines relationships between the fields listed in
