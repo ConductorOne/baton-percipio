@@ -1,6 +1,6 @@
 ![Baton Logo](./docs/images/baton-logo.png)
 
-# `baton-percipio` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-percipio.svg)](https://pkg.go.dev/github.com/conductorone/baton-percipio) ![main ci](https://github.com/conductorone/baton-percipio/actions/workflows/main.yaml/badge.svg)
+# `baton-percipio` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-percipio.svg)](https://pkg.go.dev/github.com/conductorone/baton-percipio) ![ci](https://github.com/conductorone/baton-percipio/actions/workflows/ci.yaml/badge.svg) ![verify](https://github.com/conductorone/baton-percipio/actions/workflows/verify.yaml/badge.svg)
 
 `baton-percipio` is a connector for built using the [Baton SDK](https://github.com/conductorone/baton-sdk).
 
