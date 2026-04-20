@@ -7,6 +7,7 @@ type Percipio struct {
 	ApiToken string `mapstructure:"api-token"`
 	OrganizationId string `mapstructure:"organization-id"`
 	LimitedCourses []string `mapstructure:"limited-courses"`
+	BaseUrl string `mapstructure:"base-url"`
 }
 
 func (c *Percipio) findFieldByTag(tagValue string) (any, bool) {
