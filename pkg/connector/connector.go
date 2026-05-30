@@ -73,10 +73,16 @@ func New(
 	organizationID string,
 	token string,
 	limitCourses []string,
+	baseURL string,
 ) (*Connector, error) {
+	apiURL := client.BaseApiUrl
+	if baseURL != "" {
+		apiURL = baseURL
+	}
+
 	percipioClient, err := client.New(
 		ctx,
-		client.BaseApiUrl,
+		apiURL,
 		organizationID,
 		token,
 	)

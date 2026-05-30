@@ -54,6 +54,7 @@ func getConnector(ctx context.Context, c *cfg.Percipio) (types.ConnectorServer, 
 		c.OrganizationId,
 		c.ApiToken,
 		c.LimitedCourses,
+		c.BaseUrl,
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
