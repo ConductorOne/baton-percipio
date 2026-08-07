@@ -95,8 +95,6 @@ func userResource(user client.User, parentResourceID *v2.ResourceId) (*v2.Resour
 
 	userTraitOptions := []resourceSdk.UserTraitOption{
 		resourceSdk.WithEmail(user.Email, true),
-		resourceSdk.WithStatus(status),
-		resourceSdk.WithUserProfile(profile),
 		resourceSdk.WithUserLogin(user.LoginName),
 	}
 
@@ -105,6 +103,8 @@ func userResource(user client.User, parentResourceID *v2.ResourceId) (*v2.Resour
 		userResourceType,
 		user.Id,
 		userTraitOptions,
+		resourceSdk.WithResourceStatus(v2.Status_ResourceStatus(status), ""),
+		resourceSdk.WithResourceProfile(profile),
 		resourceSdk.WithParentResourceID(parentResourceID),
 	)
 	if err != nil {
